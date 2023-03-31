@@ -265,13 +265,13 @@ class BkDcLoad_8500(object):
     def send_command(self, cmd, arg=None): 
         # Start by formatting argument if applicable
         if cmd['arg_format'] == 'four_byte_1mv_units':
-            cmd['command'] = self.to_bytes_1mv_units(arg)
+            cmd['command_arg'] = self.to_bytes_1mv_units(arg)
         elif cmd['arg_format'] == 'four_byte_0ma1_units':
-            cmd['command'] = self.to_bytes_0ma1_units(arg)
+            cmd['command_arg'] = self.to_bytes_0ma1_units(arg)
         elif cmd['arg_format'] == 'four_byte_1mw_units':
-            cmd['command'] = self.to_bytes_1mw_units(arg)
+            cmd['command_arg'] = self.to_bytes_1mw_units(arg)
         elif cmd['arg_format'] == 'op_mode':
-            cmd['command'] = self.convert_op_mode(arg)
+            cmd['command_arg'] = self.convert_op_mode(arg)
         else: pass
     
         self.tx_buff = []
@@ -307,6 +307,16 @@ class BkDcLoad_8500(object):
             return self.from_bytes_1mw_units(self.rx_buff[3:7])
         elif cmd['command_return'] == 'op_mode':
             return self.convert_op_mode(self.rx_buff[3])
+        elif cmd['command_return'] == 'front_panel_struct':
+            voltage = self.from_bytes_1mv_units(self.rx_buff[3:7])
+            current = self.from_bytes_0ma1_units(self.rx_buff[7:11])
+            power = self.from_bytes_1mw_units(self.rx_buff[11:14])
+            return  {'voltage': voltage, 'current': current, 'power': power}
+        elif cmd['command_return'] == 'mfg_info_struct':
+            model = ''.join([chr(x) for x in self.rx_buff[3:7]])
+            firmware = (int(self.rx_buff[8]) / 100.0) + int(self.rx_buff[9])
+            serial = ''.join([chr(x) for x in self.rx_buff[10:20]])
+            return  {'model': model, 'firmware': firmware, 'serial': serial}    
         else:
             print('ERROR: UNKNOWN RETURN DATA TYPE')
             assert ValueError
@@ -369,11 +379,21 @@ class BkDcLoad_8500(object):
         
     def get_resistance_setpoint(self):
         return self.send_command(self.cmd_get_cr_mode_resistance)
+        
+    def set_uvlo_setpoint(self, voltage):
+        self.send_command(self.cmd_set_uvlo_voltage, voltage)
+        
+    def get_uvlo_setpoint(self):
+        return self.send_command(self.cmd_get_uvlo_voltage)
+        
+    def get_present_values(self):
+        return self.send_command(self.cmd_get_present_values)
+        
+    def get_mfg_info(self):
+        return self.send_command(self.cmd_get_mfg_info)
     
     def __init__(self, device=device_default, baudrate=9600):
         # The 8500 instrument requires hardware flow control RTS and DTR signalling.
         # All packets to the 8500 are 26 bytes sent and 26 bytes received
         
         self.sp = serial.Serial(port=device, baudrate=baudrate, write_timeout=5)
-
-inst=BkDcLoad_8500()
